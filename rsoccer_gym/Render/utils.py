@@ -1,18 +1,34 @@
+import pygame 
+
 # COLORS RGB
 COLORS = {
-    "BLACK": (0, 0, 0),
-    "WHITE": (220, 220, 220),
-    "BG_GREEN": (20, 90, 45),
-    "GREEN": (0, 128, 0),
-    "ROBOT_BLACK": (25, 25, 25),
-    "ORANGE": (253, 106, 2),
-    "BLUE": (0, 64, 255),
-    "YELLOW": (250, 218, 94),
-    "GREEN": (57, 220, 20),
-    "RED": (151, 21, 0),
-    "PURPLE": (102, 51, 153),
-    "PINK": (220, 0, 220),
+    "BLACK":        pygame.Color(   0,   0,   0, a = 255 ),
+    "WHITE":        pygame.Color( 220, 220, 220, a = 255 ),
+    "GRAY":         pygame.Color( 200, 200, 200, a = 255 ),
+    "BG_GREEN":     pygame.Color(  20,  90,  45, a = 255 ),
+    "GREEN":        pygame.Color(   0, 128,   0, a = 255 ),
+    "ROBOT_BLACK":  pygame.Color(  25,  25,  25, a = 255 ),
+    "ORANGE":       pygame.Color( 253, 106,   2, a = 255 ),
+    "BLUE":         pygame.Color(   0,  64, 255, a = 255 ),
+    "YELLOW":       pygame.Color( 250, 218,  94, a = 255 ),
+    "GREEN":        pygame.Color(  57, 220,  20, a = 255 ),
+    "RED":          pygame.Color( 151,  21,   0, a = 255 ),
+    "PURPLE":       pygame.Color( 102,  51, 153, a = 255 ),
+    "PINK":         pygame.Color( 220,   0, 220, a = 255 ),
+
+    "WINDOW_BGA":   pygame.Color( 255, 255, 255, a = 127 ),
+    "WINDOW_BG":    pygame.Color( 255, 255, 255, a = 255 ),
+
+    "FIELD_BGA":    pygame.Color(  20,  90,  45, a = 127 ),
+    "FIELD_BG":     pygame.Color(  20,  90,  45, a = 255 ),
+    
+    "GRID":         pygame.Color( 200, 200, 200, a = 255 ),
+    "GRID_DARK":    pygame.Color( 100, 100, 100, a = 255 ),
+    
+    "POINTS":       pygame.Color( 255,  50,  50, a = 255 ),
+    "POINTS_DARK":  pygame.Color( 200,  25,  25, a = 255 ),
 }
+
 
 TAG_ID_COLORS = {
     0: {

@@ -1,7 +1,7 @@
+from rSoccer.rsoccer_gym.Render.utils import COLORS, TAG_ID_COLORS
+
 import numpy as np
 import pygame
-from rsoccer_gym.Render.utils import COLORS, TAG_ID_COLORS
-
 
 class Robot:
     size = 1
@@ -77,7 +77,7 @@ class Sim2DRobot(Robot):
         )
 
 
-class VSSRobot(Robot):
+class VSSRobot( Robot ):
     size = 0.072
 
     def __init__(self, x, y, direction, scale, id, team_color):

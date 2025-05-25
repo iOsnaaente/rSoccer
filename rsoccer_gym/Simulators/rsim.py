@@ -1,9 +1,9 @@
-import numpy as np
-import robosim
+from rSoccer.rsoccer_gym.Entities import Frame, FrameVSS, FrameSSL, Field
 
 from typing import Dict, List
-from rsoccer_gym.Entities import Frame, FrameVSS, FrameSSL, Field
 
+import numpy as np
+import robosim
 
 class RSim:
     def __init__(
@@ -159,7 +159,6 @@ class RSimSSL(RSim):
         # Update frame with new state
         frame = FrameSSL()
         frame.parse(state, self.n_robots_blue, self.n_robots_yellow)
-
         return frame
     
     def _init_simulator(self, field_type, n_robots_blue, n_robots_yellow,

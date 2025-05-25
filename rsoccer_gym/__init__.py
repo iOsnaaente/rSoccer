@@ -1,7 +1,9 @@
 from gymnasium.envs.registration import register
 
 register(
-    id="VSS-v0", entry_point="rsoccer_gym.vss.env_vss:VSSEnv", max_episode_steps=1200
+    id="VSS-v0", 
+    entry_point="rsoccer_gym.vss.env_vss:VSSEnv", 
+    max_episode_steps = 4800
 )
 
 register(

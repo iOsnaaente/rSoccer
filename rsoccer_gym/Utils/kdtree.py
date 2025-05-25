@@ -2,10 +2,8 @@ import math
 
 
 def closest_node(values, node1, node2):
-
     if node1 is None:
         return node2, node2.distance2_to(values) if node2 is not None else math.inf
-
     if node2 is None:
         return node1, node1.distance2_to(values) if node1 is not None else math.inf
 
@@ -20,7 +18,6 @@ def closest_node(values, node1, node2):
 
 class KDTree:
     class KDTreeNode:
-
         def __init__(self, values, left=None, right=None):
             self.values = values
             self.left = left

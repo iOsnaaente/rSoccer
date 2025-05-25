@@ -1,6 +1,5 @@
+from rSoccer.rsoccer_gym.Render.utils import COLORS
 import pygame
-from rsoccer_gym.Render.utils import COLORS
-
 
 class Ball:
     radius = 0.0215
