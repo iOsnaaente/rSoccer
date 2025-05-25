@@ -4,10 +4,14 @@ from rSoccer.rsoccer_gym.Entities import Frame, Robot
 from rSoccer.rsoccer_gym.Entities import PotentialField
 from rSoccer.rsoccer_gym.Entities import Field
 
+from rSoccer.rsoccer_gym.VSSS.VSSS_accel import _compute_grid_centers_core
+from rSoccer.rsoccer_gym.VSSS.VSSS_accel import _compute_heatmap_core 
+
 import gymnasium as gym
 import numpy as np
 import pygame
-import time 
+import time
+
 
 class VSSBaseEnv( gym.Env ):
     metadata = {
@@ -17,7 +21,6 @@ class VSSBaseEnv( gym.Env ):
         "render.fps"  : 60,
     }
     NORM_BOUNDS = 1.2
-    u_var = 0.0
 
     def __init__(
         self,
@@ -29,12 +32,6 @@ class VSSBaseEnv( gym.Env ):
         
         draw_grid: bool = True,
         grid_spacing: float = 0.01,
-        grid_ratio: float = 0.5,
-
-        draw_vector_field: bool = False,
-        draw_heatmap: bool = False,
-        force_field: PotentialField = None,
-        field: Field = None,
 
         potential_amplitude: float = 1,
         potential_sigma_r: float = 0.1,
@@ -83,17 +80,14 @@ class VSSBaseEnv( gym.Env ):
         self.window_id = self.field_renderer.window_id
         self.clock = None
 
-        # self.draw_vector_field = draw_vector_field
-        # self.draw_heatmap = draw_heatmap
-        # self.force_field = force_field
-
-        self.centers_colors = None 
-        self.centers = None
-        self.draw_grid = draw_grid
+        # calcula grid centers com Numba
+        half_length = self.field.length/2
+        half_width  = self.field.width/2
         self.grid_spacing = grid_spacing
-        self.grid_centers = self._compute_grid_centers( spacing = self.grid_spacing )
-        self.grid_ratio = grid_ratio
-
+        self.centers = _compute_grid_centers_core( half_length, half_width, self.grid_spacing )
+        
+        # prepara array de influencia
+        self.influence_radius2 = (3.0*potential_sigma_r)**2
         self.potential_amplitude = potential_amplitude
         self.potential_sigma_r = potential_sigma_r
         self.potential_beta_v = potential_beta_v
@@ -189,7 +183,7 @@ class VSSBaseEnv( gym.Env ):
                 pygame.display.set_caption( "VSSS Environment" )
                 self.window_surface = pygame.display.set_mode( 
                     self.window_size, 
-                    flags = pygame.FULLSCREEN | pygame.SCALED,
+                    # flags = pygame.FULLSCREEN | pygame.SCALED,
                     depth = 32, # 32 para canal Alpha ( R G B A )
                     display = self.window_id
                 )
@@ -245,20 +239,13 @@ class VSSBaseEnv( gym.Env ):
         self.field_renderer.draw( match_surface )
         t1 = time.time()
 
-        # Computa o campo de relevo
+        # Computa e desenha o Heatmap no campo 
         self.compute_heatmap( )
         t2 = time.time()
-
-        # Desenha o Heatmap no campo 
         self._draw_heatmap( match_surface )
-        
         # Desenha o Grid no campo 
         # self._draw_grid( match_surface, spacing = 0.05, point_radius = 1 ) 
         t3 = time.time()
-
-
-        # Desenha vetores de força
-        # self._draw_vector_field()
         
         ball = Ball(
             *self.pos_transform(self.frame.ball.x, self.frame.ball.y),
@@ -405,17 +392,38 @@ class VSSBaseEnv( gym.Env ):
             Amarelo ( u = 0 )   Custo zero 
             Vermelho ( u = +1 ) Caminho custoso 
         '''
-        # Pega a quantidade de pontos e divide pelo tamanho do Canva 
-        n_rows, n_cols, n_dim = self.centers.shape
-        # Computa cada pedacinho do canva 
-        for i in range( n_rows ):
-            for j in range( n_cols ):
-                # Pega o ponto central de cada ponto do grid calculado
-                mx, my = self.centers[i, j]
-                # Avalia o campo normalizado e mapeia para cor
-                u     = self._compute_potencial_field( mx, my )  # ∈[-1,1]
-                color = self._compute_heatmap_color(u)           # (r,g,b,a)
-                self.centers_colors[i,j] = color
+        # prepara arrays de parâmetros
+        if len(self.frame.robots_blue) > 1: 
+            blues = [self.frame.robots_blue[1:i] for i in range(len(self.frame.robots_blue))]
+        else:
+            blues = []
+        if len( self.frame.robots_yellow) > 1:
+            yellows = [self.frame.robots_yellow[i] for i in range(len(self.frame.robots_yellow))]
+        else: 
+            yellows = []
+        robots = blues + yellows
+        
+        # Monta os arrays de parametros para usar o NJIT
+        rx  = np.array([r.x for r in robots], dtype=np.float64)
+        ry  = np.array([r.y for r in robots], dtype=np.float64)
+        rvx = np.array([r.v_x for r in robots], dtype=np.float64)
+        rvy = np.array([r.v_y for r in robots], dtype=np.float64)
+        rth = np.array([r.theta for r in robots], dtype=np.float64)
+        rvt = np.array([r.v_theta for r in robots], dtype=np.float64)
+        rA  = np.array([r.force_field.A for r in robots], dtype=np.float64)
+        rs2 = np.array([r.force_field.sigma2 for r in robots], dtype=np.float64)
+        rb  = np.array([r.force_field.beta for r in robots], dtype=np.float64)
+        rg  = np.array([r.force_field.gamma for r in robots], dtype=np.float64)
+        rk  = np.array([r.force_field.kappa for r in robots], dtype=np.float64)
+        rom = np.array([r.force_field.omega_max for r in robots], dtype=np.float64)
+        k_s = np.array([r.force_field.k_stretch for r in robots], dtype=np.float64)
+        rlm = np.array([r.force_field.v_lin_max for r in robots], dtype=np.float64)
+        self.centers_colors = _compute_heatmap_core(
+            self.centers, rx, ry, rvx, rvy, rth, rvt,
+            rA, rs2, rb, self.potential_beta_v,
+            rg, rk, rom, rlm, k_s,
+            self.influence_radius2
+        )
 
     def _draw_heatmap( self, screen: pygame.Surface ):
         # Cria uma Superfície para servir de Canva para o HeatMap 
@@ -435,45 +443,3 @@ class VSSBaseEnv( gym.Env ):
                 rect = pygame.Rect( px0, py0, cell_w_px, cell_h_px )
                 hm_surf.fill( self.centers_colors[i,j], rect )
         screen.blit(  hm_surf, ( 0.1*self.field_renderer.scale, 0.1*self.field_renderer.scale ) )
-
-    def _compute_heatmap_color( self, u: float ) -> tuple[ int, int, int, int ]:
-        if u < -0.1:
-            t = min(u, 1.0)  # t ∈ [0,1]
-            r = 0
-            g = int( 255 * (1-t) ) 
-            b = int( 255 * t)
-        elif u <= 0.1:
-            r = 0
-            g = 255
-            b = 0
-        else:
-            t = min(u, 1.0)  # t ∈ [0,1]
-            r = int(255 * t)
-            g = int( 255 * (1-t) ) 
-            b = 0
-        return ( r%256, g%256, b%256, 127)
-
-    def _compute_potencial_field( self, xpos: int, ypos: int ) -> float:
-        """
-            Soma o potencial de todos os robôs no ponto (xpos, ypos):
-            Obs: Temos que ignorar a influencia do robo em treinamento 
-            Retorna U_total ∈ ℝ.
-        """
-        # Percorre robôs azuis, pulando o índice 0 (Agente)
-        U_total: float = 0.0
-        A_max: float = self.frame.robots_blue[0].force_field.A 
-
-        if len(self.frame.robots_blue) > 1:
-            for id in self.frame.robots_blue[1:]:
-                potential = self.frame.robots_blue[id].potential_at(xpos, ypos)
-                if potential > 0.0 : 
-                    U_total += potential 
-        if len(self.frame.robots_yellow) > 1:
-            for id in self.frame.robots_yellow:
-                potential = self.frame.robots_yellow[id].potential_at(xpos, ypos)
-                if potential > 0.0: 
-                    U_total += potential 
-        if A_max == 0:
-            return 0.0 
-        else: 
-            return U_total / A_max 

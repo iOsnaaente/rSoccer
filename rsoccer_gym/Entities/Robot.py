@@ -93,13 +93,7 @@ class Robot:
 
     def __post_init__(self):
         # Inicializa o Potencial Field associado a este robô
-        self.force_field = PotentialField (
-            owner_robot = self,
-            A = 1.0,
-            sigma = 0.08,
-            beta = 15.0,
-            epsilon = 1e-6
-        )
+        self.force_field = PotentialField ( owner_robot = self )
     
     @property
     def x(self) -> float:
