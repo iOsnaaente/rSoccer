@@ -1,6 +1,6 @@
 from rSoccer.rsoccer_gym.Utils.Utils import OrnsteinUhlenbeckAction
 from rSoccer.rsoccer_gym.Entities import Ball, Frame, Robot
-from rSoccer.rsoccer_gym.VSSS.vss_gym_base import VSSBaseEnv
+from rSoccer.rsoccer_gym.VSSS.VSSS_base import VSSBaseEnv
 from rSoccer.rsoccer_gym.Utils import KDTree
 
 import gymnasium as gym
