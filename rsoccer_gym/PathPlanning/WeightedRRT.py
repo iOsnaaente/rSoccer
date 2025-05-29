@@ -95,6 +95,7 @@ def compute_potential_jit(
             )
             if U > 0.0:
                 U_total += U
+
     # Atração da bola
     dx = goal_x - ball_x
     dy = goal_y - ball_y
@@ -103,21 +104,23 @@ def compute_potential_jit(
             dx, dy,
             ball_vx, ball_vy,
             ball_theta, ball_vtheta,
-            2.50, (0.075*0.075), 10.0,      # A, sigma2, beta
+            2.50, (0.075*0.075), 0.0,      # A, sigma2, beta
             1e-5,                           # Epsilon 
             1e-3, 25e-3,                    # Gamma e Kappa 
             45,                             # Omega Max 
-            1.0, 1.0,                       # K_stretch e V_lin_max
+            0.0, 0.0,                       # K_stretch e V_lin_max
         )
         if Ub > 0.0:
             U_total -= Ub
 
     # Normalização e clamp
-    u = U_total / A_max
-    if u > 1.0:
-        return 1.0
-    if u < -1.0:
-        return -1.0
+    u = U_total
+
+    # u = U_total / A_max
+    # if u > 1.0:
+    #     return 1.0
+    # if u < -1.0:
+    #     return -1.0
     return u
 
 
@@ -143,7 +146,7 @@ class WeightedRRTPlanner:
                  width: float, height: float,
                  env: 'VSSS_Env', # type: ignore
                  step_size: float = 0.05,
-                 max_iter: int = 100,
+                 max_iter: int = 1000,
                  sample_bias: int = 20,
                  alpha: float = 5.0,
                  goal_sample_rate: float = 0.1,
@@ -276,7 +279,7 @@ class WeightedRRTPlanner:
                 if draw_graph:
                     self._save_heatmap_with_path(
                         path,
-                        resolution = 200,
+                        resolution = 1200,
                         filename = "heatmap_with_path.jpg")
                 return list(reversed(path))
         return None
@@ -291,28 +294,74 @@ class WeightedRRTPlanner:
 
 
     def _save_heatmap_with_path( self, path, resolution = 200, filename = "heatmap.jpg"):
+
         xs = np.linspace(-self.width/2,  self.width/2,  resolution)
         ys = np.linspace(-self.height/2, self.height/2, resolution)
         U  = np.empty((resolution, resolution), dtype=float)
 
+        max_value = -np.inf
+        min_value =  np.inf
         for i, y in enumerate(ys):
             for j, x in enumerate(xs):
-                U[i, j] = self.compute_potential( x, y )
+                U_val = self.compute_potential(x, y)
+                U[i, j] = U_val
+                if U_val > max_value: max_value = U_val
+                if U_val < min_value: min_value = U_val
+        for i in range(len(ys)): 
+            for j in range(len(xs)):
+                # Normaliza entre [ 0, Max_Value ]
+                if U[i,j] > 0:
+                    U[i,j] /= max_value
+                # Normaliza entre [ Min_Value, 0 ]
+                else: 
+                    U[i,j] /= -min_value  
 
-        fig, ax = plt.subplots(figsize=(6,5))
+        # Plota o Campo Potencial 
+        fig, ax = plt.subplots( figsize = (6,5) )
         cs = ax.contourf(
             xs, ys, U,
             levels = 50,
             cmap = 'viridis'
         )
-        fig.colorbar(cs, ax=ax, label='U normalizado')
+        fig.colorbar( cs, ax = ax, label = '' )
 
+        # Plota o Path 
         if path:
             px = [p[0] for p in path]
             py = [p[1] for p in path]
-            ax.plot(px, py, '-r', linewidth=2, label='RRT path')
-            ax.scatter(px, py, c='red', s=20)
+            ax.plot( px, py, '-r', linewidth = 2, label = 'RRT path')
+            ax.scatter( px, py, c = 'red', s = 5 )
             ax.legend()
+
+        # Plota os adversários
+        adversaries = list( self.env.frame.robots_yellow.values() )
+        ax.scatter(
+            [r.x for r in adversaries],
+            [r.y for r in adversaries],
+            c = 'white',
+            marker = 'X',
+            s = 50,
+            label = 'Adversários'
+        )
+        # Plota o Robo controlado 
+        ax.scatter(
+            self.env.frame.robots_blue[0].x,
+            self.env.frame.robots_blue[0].y,
+            c = 'blue',
+            marker = 'X',
+            s = 50,
+            label = 'Adversários'
+        )
+        # Plota o Objetivo 
+        ax.scatter(
+            self.env.frame.ball.x,
+            self.env.frame.ball.y,
+            c = 'yellow',
+            marker = 'o',
+            s = 50,
+            label = 'Adversários'
+        )
+
 
         ax.set_title('Heatmap de Potenciais + Caminho RRT')
         ax.set_xlabel('X (m)')

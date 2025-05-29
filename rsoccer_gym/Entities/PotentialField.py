@@ -165,14 +165,14 @@ class PotentialField:
 
         A: float = 1.0,
         sigma: float = 0.1,
-        beta: float = 10.0,
+        beta: float = 5.0,
         epsilon: float = 1e-5,
-        gamma: float = 0.002,
-        kappa: float = 0.025,
-        omega_max: float = 45.0,
-        influence_scale: float = 2.0,
+        gamma: float = 0.001,
+        kappa: float = 0.0125,
+        omega_max: float = 30.0,
+        influence_scale: float = 3.0,
         v_lin_max: float = 1.0,
-        k_stretch: float = 100,
+        k_stretch: float = 10,
 ):
 
         self.owner = owner_robot

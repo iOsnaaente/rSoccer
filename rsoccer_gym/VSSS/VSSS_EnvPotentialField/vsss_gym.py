@@ -3,6 +3,9 @@ from rSoccer.rsoccer_gym.Entities import Ball, Frame, Robot
 from rSoccer.rsoccer_gym.VSSS.VSSS_base import VSSBaseEnv
 from rSoccer.rsoccer_gym.Utils import KDTree
 
+from rSoccer.rsoccer_gym.VSSS.VSSS_EnvPotentialField.vsss_initial_pose import * 
+from rSoccer.rsoccer_gym.VSSS.VSSS_EnvPotentialField.vsss_behaviors import * 
+
 import gymnasium as gym
 import numpy as np
 import random
@@ -177,57 +180,8 @@ class VSSS_Env( VSSBaseEnv ):
                 v_wheel1 = v_wheel1
             )
         )
-
-        # PARA MUDAR O COMPORTAMENTO DOS ROBÔS AMARELOS 
-        robot = self.frame.robots_yellow[0]
-        v_r, v_l = self.go_to_ball( robot )
-        v_wheel0, v_wheel1 = self._actions_to_v_wheels( (v_r, v_l) )
-        commands.append(
-            Robot( 
-                yellow = True, 
-                id = 0, 
-                v_wheel0 = v_wheel0, 
-                v_wheel1 = v_wheel1
-            )
-        )
-
-        robot = self.frame.robots_yellow[1]
-        v_r, v_l = self.go_to_ball( robot )
-        v_wheel0, v_wheel1 = self._actions_to_v_wheels( (v_r, v_l) )
-        commands.append(
-            Robot( 
-                yellow = True, 
-                id = 1, 
-                v_wheel0 = v_wheel0, 
-                v_wheel1 = v_wheel1
-            )
-        )
-
-        robot = self.frame.robots_yellow[2]
-        v_r, v_l = self.go_to_ball( robot )
-        v_wheel0, v_wheel1 = self._actions_to_v_wheels( (v_r, v_l) )
-        commands.append(
-            Robot( 
-                yellow = True, 
-                id = 2, 
-                v_wheel0 = v_wheel0, 
-                v_wheel1 = v_wheel1
-            )
-        )
-
-        # PARA MUDAR O COMPORTAMENTO DOS ROBÔS AZUIS
-        for i in range(1, self.n_robots_blue):
-            actions = self.ou_actions[i].sample()
-            self.actions[i] = actions
-            v_wheel0, v_wheel1 = self._actions_to_v_wheels(actions)
-            commands.append(
-                Robot(
-                    yellow = False, 
-                    id = i, 
-                    v_wheel0 = v_wheel0, 
-                    v_wheel1 = v_wheel1
-                )
-            )
+        # Manda todos robos pararem 
+        stopped_all( self, commands )
         return commands
 
 
@@ -286,67 +240,10 @@ class VSSS_Env( VSSBaseEnv ):
 
     def _get_initial_positions_frame(self):
         """Returns the position of each robot and ball for the initial frame"""
-        x     = lambda: random.uniform( -self.field.length / 2 + 0.1, self.field.length / 2 - 0.1 )
-        y     = lambda: random.uniform( -self.field.width  / 2 + 0.1, self.field.width  / 2 - 0.1 )
-        theta = lambda: random.uniform( 0, 360 )
-
-        pos_frame: Frame = Frame()
-        places = KDTree()
-        
-        # Para a bola 
-        pos_frame.ball = Ball( 
-            # x = random.uniform(-0.5, 0.5), y = random.uniform(-0.5, 0.5)
-            x = 0.5, y = 0.0
-        )
-        places.insert( (pos_frame.ball.x, pos_frame.ball.y) )
-
-        # Para os robôs azuis 
-        pos_frame.robots_blue[0] = Robot(
-            id = 0, yellow = False, 
-            _x = -0.5, _y = random.uniform(-0.5, 0.5), z = 0, 
-            theta = 0, v_theta = 0,
-            v_x = 0, v_y = 0,
-        )
-
-        # Para os robôs amarelos 
-        pos_frame.robots_yellow[0] = Robot(
-            id = 0, yellow = True, 
-            _x = 0.0, _y = 0.5, z = 0, 
-            theta = 270, v_theta = 0,
-            v_x = 0, v_y = -10,
-        )
-        pos_frame.robots_yellow[1] = Robot(
-            id = 1, yellow = True, 
-            _x = 0.0, _y = random.uniform(-0.5, 0.5), z = 0, 
-            theta = 90, v_theta = 0,
-            v_x = 0, v_y = 10,
-        )
-        pos_frame.robots_yellow[2] = Robot(
-            id = 2, yellow = True, 
-            _x = -0.5, _y = -0.5, z = 0, 
-            theta = 0, v_theta = 0,
-            v_x = 10,  v_y = 0,
-        )
-
-        if self.n_robots_blue > 1: 
-            for i in range( 1, self.n_robots_blue ):
-                x_pos, y_pos = x(), y()
-                while places.get_nearest( (x_pos, y_pos) )[1] < 0.5:
-                    x_pos, y_pos = x(), y()
-                pos_frame.robots_blue[i] = Robot( 
-                    _x = x_pos, _y = y_pos, theta = theta() 
-                )
-
-        # for j in range( self.n_robots_yellow ):
-        #     x_pos, y_pos = x(), y()
-        #     while places.get_nearest( (x_pos, y_pos) )[1] < min_dist:
-        #         x_pos, y_pos = x(), y()
-        #     pos_frame.robots_yellow[j] = Robot( 
-        #         _x = x_pos, 
-        #         _y = y_pos, 
-        #         theta = theta() 
-        #     )
-        return pos_frame
+        return init_align_Y_1v3( self )
+        return init_align_1v3( self )
+        return init_random( self )
+        return init_corners_1v3( self )
 
 
     def _actions_to_v_wheels(self, actions):

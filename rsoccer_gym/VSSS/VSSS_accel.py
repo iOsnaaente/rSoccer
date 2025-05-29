@@ -39,13 +39,14 @@ def _compute_heatmap_core(
     influence_radius2: float) -> np.ndarray:
     n_rows, n_cols, _ = centers.shape
     colors = np.empty((n_rows, n_cols, 4), dtype=np.uint8)
+    
+    # Para normalizar o campo entre [-1,1] 
+    values = np.empty((n_rows, n_cols, 1), dtype=np.float64)
+    max_value = 0.0 
+    min_value = 0.0 
 
-    # determine global A_max for normalization (include all robots)
-    A_max = 0.0
-    for a in robots_A:
-        if a > A_max:
-            A_max = a
-    A_max = max(A_max, 2.5 )  
+    # Determina o A global para normalização
+    A_max = robots_A[0]
 
     # loop over grid
     for i in range(n_rows):
@@ -66,7 +67,7 @@ def _compute_heatmap_core(
                     robots_k_stretch[r], robots_linear_max[r]
                 )
                 if U > 0.0:
-                    U_total += U
+                    U_total += U / A_max
                     
             # add ball potential
             dx = centers[i,j,0] - ball_x
@@ -77,29 +78,33 @@ def _compute_heatmap_core(
                     dx, dy,
                     ball_vx, ball_vy,
                     ball_theta, ball_v_theta,
-                    2.50, (0.075*0.075), 10.0,      # A, sigma2, beta
+                    2.50, (0.1**2), 10.0,      # A, sigma2, beta
                     1e-5,                           # Epsilon 
                     1e-3, 25e-3,                    # Gamma e Kappa 
                     45,                             # Omega Max 
                     1.0, 1.0,                       # K_stretch e V_lin_max
                 )
                 if U > 0.0:
-                    U_total -= U
+                    U_total -= U / A_max
 
-            # normaliza
-            if A_max <= 0.0:
-                u = 0.0 
-            else:
-                u = U_total / A_max
+            # Para normalizar
+            values[i, j] = U_total 
+            max_value = max_value if U_total <= max_value else U_total 
+            min_value = min_value if U_total >= min_value else U_total 
+    
 
+    for i in range(n_rows):
+        for j in range(n_cols):
+            # Normaliza entre [ 0, Max_Value ]
+            u = ( values[i,j,0] ) / max_value 
 
-            if u < -0.05:
-                t = min(u, 1.0)  # t ∈ [0,1]
-                r_ = 0
-                g_ = 0
-                b_ = 255
-                a_ = int( 255 * (1-t) ) 
-            elif u <= 0.05:
+            # if u < -0.05:
+            #     t = min(u, 1.0)  # t ∈ [0,1]
+            #     r_ = 0
+            #     g_ = 0
+            #     b_ = 255
+            #     a_ = int( 255 * (1-t) ) 
+            if u <= 0.05:
                 r_ = 0
                 g_ = 0
                 b_ = 0
