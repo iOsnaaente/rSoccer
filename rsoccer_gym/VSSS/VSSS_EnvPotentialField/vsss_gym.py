@@ -37,6 +37,7 @@ def _normalize_angle(angle: float) -> float:
         1               Ball Y
         2               Ball Vx
         3               Ball Vy
+
         4 + (7 * i)     id i Blue Robot X
         5 + (7 * i)     id i Blue Robot Y
         6 + (7 * i)     id i Blue Robot sin(theta)
@@ -44,6 +45,7 @@ def _normalize_angle(angle: float) -> float:
         8 + (7 * i)     id i Blue Robot Vx
         9  + (7 * i)    id i Blue Robot Vy
         10 + (7 * i)    id i Blue Robot v_theta
+
         25 + (5 * i)    id i Yellow Robot X
         26 + (5 * i)    id i Yellow Robot Y
         27 + (5 * i)    id i Yellow Robot Vx
@@ -178,33 +180,38 @@ class VSSS_Env( VSSBaseEnv ):
 
         # PARA MUDAR O COMPORTAMENTO DOS ROBÔS AMARELOS 
         robot = self.frame.robots_yellow[0]
+        v_r, v_l = self.go_to_ball( robot )
+        v_wheel0, v_wheel1 = self._actions_to_v_wheels( (v_r, v_l) )
         commands.append(
             Robot( 
                 yellow = True, 
                 id = 0, 
-                v_wheel0 = 0, 
-                v_wheel1 = 0
+                v_wheel0 = v_wheel0, 
+                v_wheel1 = v_wheel1
             )
         )
 
         robot = self.frame.robots_yellow[1]
+        v_r, v_l = self.go_to_ball( robot )
+        v_wheel0, v_wheel1 = self._actions_to_v_wheels( (v_r, v_l) )
         commands.append(
             Robot( 
                 yellow = True, 
                 id = 1, 
-                v_wheel0 = 45, 
-                v_wheel1 = 45
+                v_wheel0 = v_wheel0, 
+                v_wheel1 = v_wheel1
             )
         )
 
         robot = self.frame.robots_yellow[2]
         v_r, v_l = self.go_to_ball( robot )
+        v_wheel0, v_wheel1 = self._actions_to_v_wheels( (v_r, v_l) )
         commands.append(
             Robot( 
                 yellow = True, 
                 id = 2, 
-                v_wheel0 = v_r, 
-                v_wheel1 = v_l*50
+                v_wheel0 = v_wheel0, 
+                v_wheel1 = v_wheel1
             )
         )
 
@@ -279,75 +286,57 @@ class VSSS_Env( VSSBaseEnv ):
 
     def _get_initial_positions_frame(self):
         """Returns the position of each robot and ball for the initial frame"""
-        # x     = lambda: random.uniform( -self.field.length / 2 + 0.1, self.field.length / 2 - 0.1 )
-        # y     = lambda: random.uniform( -self.field.width  / 2 + 0.1, self.field.width  / 2 - 0.1 )
-        # theta = lambda: random.uniform( 0, 360 )
+        x     = lambda: random.uniform( -self.field.length / 2 + 0.1, self.field.length / 2 - 0.1 )
+        y     = lambda: random.uniform( -self.field.width  / 2 + 0.1, self.field.width  / 2 - 0.1 )
+        theta = lambda: random.uniform( 0, 360 )
+
         pos_frame: Frame = Frame()
         places = KDTree()
         
         # Para a bola 
         pos_frame.ball = Ball( 
-            x = 0.5, y = 0.0 
+            # x = random.uniform(-0.5, 0.5), y = random.uniform(-0.5, 0.5)
+            x = 0.5, y = 0.0
         )
         places.insert( (pos_frame.ball.x, pos_frame.ball.y) )
 
         # Para os robôs azuis 
         pos_frame.robots_blue[0] = Robot(
-            id = 0, 
-            yellow = False, 
-            _x = -0.5,
-            _y = 0, 
-            z = 0, 
-            theta = 0,
-            v_x = 0, 
-            v_y = 0,
-            v_theta = 0
+            id = 0, yellow = False, 
+            _x = -0.5, _y = random.uniform(-0.5, 0.5), z = 0, 
+            theta = 0, v_theta = 0,
+            v_x = 0, v_y = 0,
         )
-        # for i in range( self.n_robots_blue ):
-        #     x_pos, y_pos = x(), y()
-        #     while places.get_nearest( (x_pos, y_pos) )[1] < min_dist:
-        #         x_pos, y_pos = x(), y()
-        #     pos_frame.robots_blue[i] = Robot( 
-        #         _x = x_pos, 
-        #         _y = y_pos, 
-        #         theta = theta() 
-        #     )
 
-
-        # # Para os robôs amarelos 
+        # Para os robôs amarelos 
         pos_frame.robots_yellow[0] = Robot(
-            id = 0, 
-            yellow = True, 
-            _x = 0.0,
-            _y = 0.5, 
-            z = 0, 
-            theta = 270,
-            v_x = 0, 
-            v_y = -10,
-            v_theta = 0
+            id = 0, yellow = True, 
+            _x = 0.0, _y = 0.5, z = 0, 
+            theta = 270, v_theta = 0,
+            v_x = 0, v_y = -10,
         )
         pos_frame.robots_yellow[1] = Robot(
-            id = 1, 
-            yellow = True, 
-            _x = 0.0,
-            _y = -0.50, 
-            z = 0, 
-            theta = 90,
-            v_x = 0, 
-            v_y = 10,
-            v_theta = 0
+            id = 1, yellow = True, 
+            _x = 0.0, _y = random.uniform(-0.5, 0.5), z = 0, 
+            theta = 90, v_theta = 0,
+            v_x = 0, v_y = 10,
         )
         pos_frame.robots_yellow[2] = Robot(
-            id = 2, 
-            yellow = True, 
-            _x = -0.5,
-            _y = -0.5, 
-            z = 0, 
-            theta = 0,
-            v_x = 10, 
-            v_y = 0,
-            v_theta = 0
+            id = 2, yellow = True, 
+            _x = -0.5, _y = -0.5, z = 0, 
+            theta = 0, v_theta = 0,
+            v_x = 10,  v_y = 0,
         )
+
+        if self.n_robots_blue > 1: 
+            for i in range( 1, self.n_robots_blue ):
+                x_pos, y_pos = x(), y()
+                while places.get_nearest( (x_pos, y_pos) )[1] < 0.5:
+                    x_pos, y_pos = x(), y()
+                pos_frame.robots_blue[i] = Robot( 
+                    _x = x_pos, _y = y_pos, theta = theta() 
+                )
+
         # for j in range( self.n_robots_yellow ):
         #     x_pos, y_pos = x(), y()
         #     while places.get_nearest( (x_pos, y_pos) )[1] < min_dist:
@@ -429,16 +418,15 @@ class VSSS_Env( VSSBaseEnv ):
 
     
     def go_to_ball(
-        self,
-        robot: Robot,
-        K_lin: float = 1.0,
-        K_ang: float = 4.0
+        self, robot: Robot, K_lin: float = 1.0, K_ang: float = 4.0
     ) -> np.ndarray:
+        
         """
         Retorna um vetor [a_l, a_r] em [-1,1] prontos para _actions_to_v_wheels,
         que faz o robô aproximar-se da bola com controle proporcional em distância
         e ângulo.
         """
+        
         # 1) Posição bola e robô
         ball = self.frame.ball
         dx = ball.x - robot.x
@@ -447,7 +435,7 @@ class VSSS_Env( VSSBaseEnv ):
 
         # 2) Se já está quase em cima, para
         if dist < 1e-2:
-            return np.array([0.0, 0.0], dtype=float)
+            return np.array( [0.0, 0.0], dtype = float )
 
         # 3) Ângulo desejado (radianos) e erro de heading
         angle_to_ball = math.atan2(dy, dx)                # em rad
@@ -455,8 +443,12 @@ class VSSS_Env( VSSBaseEnv ):
         err = _normalize_angle(angle_to_ball - theta_rad)
 
         # 4) Lei de controle P
-        v = K_lin * dist             # velocidade linear desejada (m/s)
-        omega = K_ang * err          # velocidade angular desejada (rad/s)
+        v = K_lin * dist             
+        # velocidade linear desejada (m/s)
+        if dist < 0.05: 
+            v = K_lin
+        # velocidade angular desejada (rad/s)
+        omega = K_ang * err          
 
         # 5) Converte em velocidades de roda (m/s)
         L = self.field.rbt_wheel_radius
@@ -470,4 +462,56 @@ class VSSS_Env( VSSBaseEnv ):
         v_r = v_r * max_v / m
 
         # 7) Retorna normalizado em [-1,1] para cada roda
+        return np.array([v_l / max_v, v_r / max_v], dtype=float)
+
+
+    def go_to_point(self, 
+        robot,
+        x_target: float,
+        y_target: float,
+        K_lin: float = 1.0,
+        K_ang: float = 4.0,
+        wheel_base: float = 0.08,   
+        max_v: float = 1.0          
+    ) -> np.ndarray:
+        """
+        Controla o robô para aproximar-se do ponto (x_target, y_target).
+        Retorna array [v_l_norm, v_r_norm] em [-1,1] para as rodas esquerda e direita.
+        Agora suporta movimento de ré quando o alvo está atrás do robô.
+        """
+        # Posição e orientação atuais
+        dx = x_target - robot.x
+        dy = y_target - robot.y
+        dist = math.hypot(dx, dy)
+
+        # Se perto o suficiente, para
+        if dist < 1e-3:
+            return np.array([0.0, 0.0], dtype=float)
+
+        # Ângulo desejado e erro de heading
+        angle_to_target = math.atan2(dy, dx)      # rad
+        theta_rad = math.radians(robot.theta)     # rad
+        err = (angle_to_target - theta_rad + math.pi) % (2*math.pi) - math.pi
+
+        # Se o alvo está atrás (>90°), vai de ré
+        v_dir = 1.0
+        if abs(err) > math.pi / 2:
+            v_dir = -1.0
+            # reduzimos o erro em π para girar menos
+            err = err - math.copysign(math.pi, err)
+        
+        # Lei de controle P
+        v = v_dir * K_lin * dist
+        omega = K_ang * err
+
+        # Velocidades de roda (m/s)
+        v_r = v + omega * (wheel_base / 2)
+        v_l = v - omega * (wheel_base / 2)
+
+        # Normaliza para [-max_v, max_v]
+        m = max(abs(v_l), abs(v_r), max_v)
+        v_l = v_l * max_v / m
+        v_r = v_r * max_v / m
+
+        # Retorna valores em [-1,1]
         return np.array([v_l / max_v, v_r / max_v], dtype=float)

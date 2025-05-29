@@ -66,6 +66,7 @@ class RenderField:
     field_background_color: tuple = COLORS[ "WINDOW_BG" ]
     field_line_color: tuple = COLORS[ "BLACK" ]
 
+    static_surf: pygame.Surface = None 
 
     def __init__(self, *args, **kwargs):    
         # Pega o tamanho da tela com preferencia para a segunda tela 
@@ -99,6 +100,20 @@ class RenderField:
         else:
             self._scale = self._scale_y
         print(f"Scale: {self._scale}")
+
+        
+    def static_surface( self ) -> pygame.Surface:
+        if self.static_surf == None:
+            self.static_surf = pygame.Surface(
+                ( self.field_width, self.field_height ),
+                flags = pygame.SRCALPHA,
+                depth = 32
+            )
+            self.draw( self.static_surf )
+        return self.static_surf
+
+    def update_static_surface( self ):
+        self.draw( self.static_surf )
 
 
     @property

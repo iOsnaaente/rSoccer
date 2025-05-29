@@ -108,6 +108,7 @@ def _potential_core(dx: float,
         turn_sign = 1.0 if v_theta > 0.0 else -1.0 if v_theta < 0.0 else 0.0
         cos_turn = (px*ex + py*ey) * turn_sign
         turn_factor = 1.0 + kappa * omega * cos_turn * lin_scale
+        U_ori = dir_factor * turn_factor 
 
         # 4) projeções
         proj_par = dx*dxn + dy*dyn
@@ -115,12 +116,16 @@ def _potential_core(dx: float,
 
         # 5) desvios: estica ao longo de d̂ com v_lin
         sigma = math.sqrt(sigma2)
-        sigma_par = 2*sigma + k_stretch * min(v_lin, v_lin_max)
+        sigma_par = sigma + k_stretch * min(v_lin, v_lin_max)
         sigma_per = 0.5*sigma
 
         # 6) half–Gaussian elipsoidal
-        exponent = -0.5 * ( (proj_par/sigma_par)**2 + (proj_per/sigma_per)**2 )
-        return U0 * (1 + dir_factor * turn_factor) * ( 1 + math.exp(exponent) )
+        E_hg = math.exp( -0.5 * ( (proj_par/sigma_par)**2 + (proj_per/sigma_per)**2 ))
+        if E_hg < 0.0:
+            E_hg = 0.0 
+        
+        # 7) Retorna o potencial total
+        return U0 * ( 1 + U_ori ) * ( 1 + E_hg ) 
 
 
 @njit(cache=True)
@@ -157,16 +162,17 @@ class PotentialField:
     def __init__(
         self, 
         owner_robot,
-        A: float = 2.0,
-        sigma: float = 0.075,
-        beta: float = 15.0,
+
+        A: float = 1.0,
+        sigma: float = 0.1,
+        beta: float = 10.0,
         epsilon: float = 1e-5,
-        gamma: float = 0.001,
+        gamma: float = 0.002,
         kappa: float = 0.025,
         omega_max: float = 45.0,
         influence_scale: float = 2.0,
         v_lin_max: float = 1.0,
-        k_stretch: float = 10,
+        k_stretch: float = 100,
 ):
 
         self.owner = owner_robot
@@ -190,6 +196,7 @@ class PotentialField:
         dy = y - self.owner.y
         if ((dx*dx) + (dy*dy)) > self.influence_radius2:
             return 0.0
+        
         # 1) Calcula potencial via função jitted
         return _potential_core(
             dx, dy,
@@ -203,7 +210,7 @@ class PotentialField:
             self.v_lin_max
         )
 
-    def gradient_at(self, x: float, y: float) -> tuple[float, float]:
+    def gradient_at( self, x: float, y: float) -> tuple[float, float]:
         dx = x - self.owner.x
         dy = y - self.owner.y
         return _gradient_core(
@@ -221,19 +228,24 @@ class PotentialField:
         return self.force_at(other_robot.x, other_robot.y)
 
     def update_parameters(self,
-                          A: float = None,
-                          sigma: float = None,
-                          beta: float = None,
-                          epsilon: float = None,
-                          gamma: float = None,
-                          kappa: float = None,
-                          omega_max: float = None):
-        if A is not None:        self.A = A
-        if beta is not None:     self.beta = beta
-        if epsilon is not None:  self.epsilon = epsilon
-        if gamma is not None:    self.gamma = gamma
-        if kappa is not None:    self.kappa = kappa
-        if omega_max is not None: self.omega_max = omega_max
+        A: float = None,
+        sigma: float = None,
+        beta: float = None,
+        epsilon: float = None,
+        gamma: float = None,
+        kappa: float = None,
+        omega_max: float = None,
+        k_stretch: float = None,
+        v_lin_max: float = None  
+    ) -> None:
+        if A is not None:           self.A = A
+        if beta is not None:        self.beta = beta
+        if epsilon is not None:     self.epsilon = epsilon
+        if gamma is not None:       self.gamma = gamma
+        if kappa is not None:       self.kappa = kappa
+        if omega_max is not None:   self.omega_max = omega_max
+        if k_stretch is not None:   self.k_stretch = k_stretch
+        if v_lin_max is not None:   self.v_lin_max = v_lin_max
         if sigma is not None:
             self.sigma = sigma
             self.sigma2 = sigma * sigma

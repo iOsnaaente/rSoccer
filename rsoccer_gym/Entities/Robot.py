@@ -89,7 +89,7 @@ class Robot:
     trajectory: Trajectories = field( default_factory = Trajectories )
 
     # Campo potencial de força relativa a esse Robô 
-    potencial_field: PotentialField = field( init = False )
+    force_field: PotentialField = field( init = False )
 
     def __post_init__(self):
         # Inicializa o Potencial Field associado a este robô

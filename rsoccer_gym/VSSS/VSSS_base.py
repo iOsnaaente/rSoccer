@@ -1,8 +1,16 @@
-from rSoccer.rsoccer_gym.Render import COLORS, Ball, VSSRenderField, VSSRobot
+from rSoccer.rsoccer_gym.PathPlanning.WeightedRRT import WeightedRRTPlanner 
+
 from rSoccer.rsoccer_gym.Simulators.rsim import RSimVSS
-from rSoccer.rsoccer_gym.Entities import Frame, Robot
+
 from rSoccer.rsoccer_gym.Entities import PotentialField
+from rSoccer.rsoccer_gym.Entities import Frame
+from rSoccer.rsoccer_gym.Entities import Robot
 from rSoccer.rsoccer_gym.Entities import Field
+
+from rSoccer.rsoccer_gym.Render import VSSRenderField 
+from rSoccer.rsoccer_gym.Render import VSSRobot
+from rSoccer.rsoccer_gym.Render import COLORS 
+from rSoccer.rsoccer_gym.Render import Ball
 
 from rSoccer.rsoccer_gym.VSSS.VSSS_accel import _compute_grid_centers_core
 from rSoccer.rsoccer_gym.VSSS.VSSS_accel import _compute_heatmap_core 
@@ -10,7 +18,6 @@ from rSoccer.rsoccer_gym.VSSS.VSSS_accel import _compute_heatmap_core
 import gymnasium as gym
 import numpy as np
 import pygame
-import time
 
 
 class VSSBaseEnv( gym.Env ):
@@ -29,13 +36,8 @@ class VSSBaseEnv( gym.Env ):
         n_robots_yellow: int,
         time_step: float,
         render_mode = None,
-        
-        draw_grid: bool = True,
         grid_spacing: float = 0.01,
 
-        potential_amplitude: float = 1,
-        potential_sigma_r: float = 0.1,
-        potential_beta_v: float = 0.2 
     ):
         
         # Initialize Simulator
@@ -73,6 +75,7 @@ class VSSBaseEnv( gym.Env ):
 
         # Render
         self.field_renderer = VSSRenderField()
+        self.static_field_surface = self.field_renderer.static_surface()
         self.window_surface = None
         self.window_size = self.field_renderer.window_size
         self.field_size = self.field_renderer.field_size
@@ -85,12 +88,11 @@ class VSSBaseEnv( gym.Env ):
         half_width  = self.field.width/2
         self.grid_spacing = grid_spacing
         self.centers = _compute_grid_centers_core( half_length, half_width, self.grid_spacing )
-        
-        # prepara array de influencia
-        self.influence_radius2 = (3.0*potential_sigma_r)**2
-        self.potential_amplitude = potential_amplitude
-        self.potential_sigma_r = potential_sigma_r
-        self.potential_beta_v = potential_beta_v
+
+        # Inicializa o pathPlanning 
+        self.path_planning_method: WeightedRRTPlanner = None 
+        self.path: list = []
+
 
 
     def _get_commands(self, action):
@@ -139,21 +141,7 @@ class VSSBaseEnv( gym.Env ):
 
         # Get frame from simulator
         self.frame = self.rsim.get_frame()
-        
-        # Adiciona o campo potencial nos robos 
-        for id in self.frame.robots_blue:
-            self.frame.robots_blue[id].force_field.update_parameters( 
-                self.potential_amplitude, 
-                self.potential_sigma_r,
-                self.potential_beta_v
-            )
-        for id in self.frame.robots_yellow:
-            self.frame.robots_yellow[id].force_field.update_parameters( 
-                self.potential_amplitude, 
-                self.potential_sigma_r,
-                self.potential_beta_v
-            )
-        
+
         obs = self._frame_to_observations()
         if self.render_mode == "human":
             self.render()
@@ -183,7 +171,7 @@ class VSSBaseEnv( gym.Env ):
                 pygame.display.set_caption( "VSSS Environment" )
                 self.window_surface = pygame.display.set_mode( 
                     self.window_size, 
-                    # flags = pygame.FULLSCREEN | pygame.SCALED,
+                    flags = pygame.FULLSCREEN | pygame.SCALED,
                     depth = 32, # 32 para canal Alpha ( R G B A )
                     display = self.window_id
                 )
@@ -224,6 +212,7 @@ class VSSBaseEnv( gym.Env ):
     def norm_w( self, w ):
         return np.clip(w / self.max_w, -self.NORM_BOUNDS, self.NORM_BOUNDS)
     
+
     def _render( self ):
         # Cria uma Surface para desenhar e ajusta no centro da tela 
         self.window_surface.fill( COLORS["GRAY"] )
@@ -233,20 +222,14 @@ class VSSBaseEnv( gym.Env ):
             flags = pygame.SRCALPHA, 
             depth = 32 
         )
-        
-        t0 = time.time()
-        # Desenha o Campo (linhas de campo, gols etc)
-        self.field_renderer.draw( match_surface )
-        t1 = time.time()
 
         # Computa e desenha o Heatmap no campo 
         self.compute_heatmap( )
-        t2 = time.time()
+
+        # Desenha o HeatMap 
         self._draw_heatmap( match_surface )
-        # Desenha o Grid no campo 
+
         # self._draw_grid( match_surface, spacing = 0.05, point_radius = 1 ) 
-        t3 = time.time()
-        
         ball = Ball(
             *self.pos_transform(self.frame.ball.x, self.frame.ball.y),
             self.field_renderer.scale
@@ -278,19 +261,19 @@ class VSSBaseEnv( gym.Env ):
             )
             rbt.draw(match_surface)
         ball.draw(match_surface)
+
+        # Desenha o PathPlanning 
+        self.compute_path_planning( match_surface )
+
         
-        # Desenha a superfície do jogo no centro da tela
+        # Coordenadas do centro da tela
         x = int( (self.window_size[0]/2) - (self.field_size[0] / 2) )
         y = int( (self.window_size[1]/2) - (self.field_size[1] / 2) )
+
+        # Desenha os elementos na tela 
+        self.window_surface.blit( self.static_field_surface, ( x, y ) ) 
         self.window_surface.blit( match_surface, ( x, y ) )
-        t4 = time.time()
         
-        print( f"Init counting time at {t0:10.4f}s" )
-        print( f"dt compute heatMap: {(t2 - t1):10.4f}s" )
-        print( f"dt field render: {(t1 - t0):10.4f}s" )
-        print( f"dt Draw HeatMap: {(t3 - t2):10.4f}s" )
-        print( f"dt draw players: {(t4 - t3):10.4f}s" )
-        print( f"dt total: {(t4 - t0):10.4f}s" )
 
 
     def _draw_trajectories(self):
@@ -311,51 +294,6 @@ class VSSBaseEnv( gym.Env ):
                         pygame.draw.circle( self.window_surface, COLORS["RED"], (x,y), 5, 2)
 
 
-    def _draw_vector_field( self, step = 20, scale = 50 ):
-        for i in range(0, self.window_size[0], step):
-            for j in range(0, self.window_size[1], step):
-                mx = (i - self.field_renderer.center_x) / self.field_renderer.scale
-                my = (j - self.field_renderer.center_y) / self.field_renderer.scale
-                fx, fy = self.force_field.force_at(mx, my)
-                start = (i, j)
-                end = (i + fx*scale, j - fy*scale)
-                pygame.draw.line(self.window_surface, (0,0,255), start, end, 1)
-                # opcionalmente desenhe a ponta da seta
-
-
-    def _draw_grid( self, screen: pygame.surface.Surface, spacing: float = 0.1, point_radius: int = 2 ) -> None:
-        """
-        Desenha linhas de grid e um ponto em cada centro de célula.
-        """
-        if self.draw_grid: 
-            half_length = self.field.length / 2
-            half_width  = self.field.width  / 2
-
-            # 1) Linhas verticais        
-            x = -half_length
-            while x <= half_length:
-                start = self.pos_transform( x, -half_width)
-                end   = self.pos_transform( x,  half_width)
-                pygame.draw.line( screen, COLORS["GRID"], start, end, 1)
-                x += spacing
-
-            # 2) Linhas horizontais
-            y = -half_width
-            while y <= half_width:
-                start = self.pos_transform(-half_length, y)
-                end   = self.pos_transform( half_length, y)
-                pygame.draw.line( screen, COLORS["GRID"], start, end, 1)
-                y += spacing
-
-            # 3) Pontos nos centros
-            p_rows, p_cols, p_dim = self.centers.shape 
-            for xi in range( p_rows ):
-                for yi in range( p_cols ):
-                    pxi, pyi = self.centers[ xi, yi ]
-                    px, py = self.pos_transform( pxi, pyi )
-                    pcolor = tuple(self.centers_colors[ xi, yi ]) 
-                    pygame.draw.circle( screen, pcolor, (px, py), point_radius )
-
 
 
     def _compute_grid_centers( self, spacing: float = 0.1 ) -> np.ndarray:
@@ -371,7 +309,7 @@ class VSSBaseEnv( gym.Env ):
         # Cria uma malha 2D de centros
         Xc, Yc = np.meshgrid(x_centers, y_centers)
         self.centers = np.stack([Xc, Yc], axis=-1)
-        self.centers_colors = np.full(
+        self.centers_Ui = np.full(
             ( len(y_centers), len(x_centers), 4 ),
             fill_value = [ 0, 0, 0, 127 ],
             dtype = np.uint8
@@ -393,12 +331,12 @@ class VSSBaseEnv( gym.Env ):
             Vermelho ( u = +1 ) Caminho custoso 
         '''
         # prepara arrays de parâmetros
-        if len(self.frame.robots_blue) > 1: 
-            blues = [self.frame.robots_blue[1:i] for i in range(len(self.frame.robots_blue))]
+        if self.n_robots_blue > 1: 
+            blues = [self.frame.robots_blue[i] for i in range(1, self.n_robots_blue)]
         else:
             blues = []
-        if len( self.frame.robots_yellow) > 1:
-            yellows = [self.frame.robots_yellow[i] for i in range(len(self.frame.robots_yellow))]
+        if self.n_robots_yellow > 1:
+            yellows = [self.frame.robots_yellow[i] for i in range(self.n_robots_yellow) ]
         else: 
             yellows = []
         robots = blues + yellows
@@ -410,7 +348,7 @@ class VSSBaseEnv( gym.Env ):
         rvy = np.array([r.v_y for r in robots], dtype=np.float64)
         rth = np.array([r.theta for r in robots], dtype=np.float64)
         rvt = np.array([r.v_theta for r in robots], dtype=np.float64)
-        rA  = np.array([r.force_field.A for r in robots], dtype=np.float64)
+        rA  = np.array([r.force_field.A*10 for r in robots], dtype=np.float64)
         rs2 = np.array([r.force_field.sigma2 for r in robots], dtype=np.float64)
         rb  = np.array([r.force_field.beta for r in robots], dtype=np.float64)
         rg  = np.array([r.force_field.gamma for r in robots], dtype=np.float64)
@@ -418,28 +356,81 @@ class VSSBaseEnv( gym.Env ):
         rom = np.array([r.force_field.omega_max for r in robots], dtype=np.float64)
         k_s = np.array([r.force_field.k_stretch for r in robots], dtype=np.float64)
         rlm = np.array([r.force_field.v_lin_max for r in robots], dtype=np.float64)
-        self.centers_colors = _compute_heatmap_core(
-            self.centers, rx, ry, rvx, rvy, rth, rvt,
-            rA, rs2, rb, self.potential_beta_v,
+        self.centers_Ui = _compute_heatmap_core(
+            self.centers, 
+            self.frame.ball.x,
+            self.frame.ball.y,
+            self.frame.ball.v_x,
+            self.frame.ball.v_y,
+            self.frame.ball.theta,
+            self.frame.ball.v_theta,
+            rx, ry, rvx, rvy, rth, rvt,
+            rA, rs2, rb, 0.2,
             rg, rk, rom, rlm, k_s,
-            self.influence_radius2
+            ( (3.0*robots[0].force_field.sigma)**2 )
         )
 
     def _draw_heatmap( self, screen: pygame.Surface ):
-        # Cria uma Superfície para servir de Canva para o HeatMap 
         screen_w, screen_h = screen.get_size()
-        hm_surf = pygame.Surface( ( screen_w, screen_h ), flags = pygame.SRCALPHA )
-        # Pega a quantidade de pontos e divide pelo tamanho do Canva 
-        n_rows, n_cols, n_dim = self.centers.shape
-        cell_w_px = screen_w // n_cols
-        cell_h_px = screen_h // n_rows
-        # Preenche cada pedacinho do canva 
-        for i in range( n_rows ):
-            for j in range( n_cols ):
-                # Pixel de coordenada começando pelo canto superior-esquerdo do Grid 
-                px0 = j * cell_w_px
-                py0 = i * cell_h_px
-                # Preenche o retângulo daquela célula
-                rect = pygame.Rect( px0, py0, cell_w_px, cell_h_px )
-                hm_surf.fill( self.centers_colors[i,j], rect )
-        screen.blit(  hm_surf, ( 0.1*self.field_renderer.scale, 0.1*self.field_renderer.scale ) )
+        screen_w -= 2*self.field_renderer.goal_depth
+        screen_h -= 2*self.field_renderer.margin
+        n_rows, n_cols, _ = self.centers_Ui.shape
+        # 1) Cria surface “pequena” de cells
+        small = pygame.Surface((n_cols, n_rows), flags=pygame.SRCALPHA, depth=32)
+        # 2) Copia todos os RGB de uma só vez
+        #    surfarray.pixels3d entrega view (W×H×3) para escrever em C
+        rgb_array = pygame.surfarray.pixels3d(small)
+        # centers_Ui está em shape (n_rows,n_cols,4) → swapaxes para (n_cols,n_rows,4)
+        # e fatiamos os 3 canais
+        rgb_array[:, :, :] = self.centers_Ui.swapaxes(0,1)[:,:,:3]
+        # e o alpha:
+        alpha_array = pygame.surfarray.pixels_alpha(small)
+        alpha_array[:, :] = self.centers_Ui.swapaxes(0,1)[:,:,3]
+        # 3) Escala para o tamanho da tela em C
+        #    smoothscale pode dar visual mais suave, mas scale é mais rápido
+        large = pygame.transform.scale(small, (screen_w, screen_h))
+        # 4) Blita no offset desejado
+        offset = ( self.field_renderer.goal_depth, self.field_renderer.margin )
+        screen.blit(large, offset)
+    
+
+    def compute_path_planning( self, screen: pygame.Surface ):
+        p_start = (self.frame.robots_blue[0].x, self.frame.robots_blue[0].y )
+        p_goal = ( self.frame.ball.x, self.frame.ball.y )
+        w, h = self.field.width, self.field.length 
+        self.path_planning_method = WeightedRRTPlanner( 
+            p_start, p_goal, 
+            w, h, 
+            self,
+        )
+        self.path = self.path_planning_method.compute_path(  )
+        self.draw_path( screen )
+
+
+    def draw_path( self, screen, circle_radius = 5, line_width = 2 ):
+        """
+        Desenha o path planning considerando que os pontos estão em coordenadas
+        centradas no campo:
+        - x ∈ [-width/2, +width/2]
+        - y ∈ [-height/2, +height/2]
+        Converte para coordenadas de tela:
+        sx = offset_x + (x + width/2) * scale
+        sy = offset_y + (height/2 - y) * scale
+        """
+        if not self.path:
+            return
+
+        # Converte todos os pontos para coordenadas de tela
+        screen_points = []
+        offset = ( self.field_renderer.goal_depth, self.field_renderer.margin )
+        for x, y in self.path:
+            sx = offset[0] + (x + self.field.length/2) * self.field_renderer.scale
+            sy = offset[1] + (self.field.width/2 + y) * self.field_renderer.scale
+            screen_points.append((int(sx), int(sy)))
+
+        # Desenha linhas conectando os pontos
+        pygame.draw.lines(screen, COLORS['BLACK'], False, screen_points, line_width)
+
+        # Desenha bolinhas nos nós do caminho
+        for pt in screen_points:
+            pygame.draw.circle(screen, COLORS['RED'], pt, circle_radius)

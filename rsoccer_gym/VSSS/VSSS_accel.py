@@ -24,16 +24,19 @@ def _compute_grid_centers_core(half_length: float, half_width: float, spacing: f
 
 
 @njit( cache = True )
-def _compute_heatmap_core(centers: np.ndarray,
-                          robots_x: np.ndarray, robots_y: np.ndarray,
-                          robots_vx: np.ndarray, robots_vy: np.ndarray,
-                          robots_theta: np.ndarray, robots_vtheta: np.ndarray,
-                          robots_A: np.ndarray, robots_sigma2: np.ndarray, robots_beta: np.ndarray,
-                          robots_epsilon: float,
-                          robots_gamma: np.ndarray, robots_kappa: np.ndarray, robots_omega_max: np.ndarray,
-                          robots_linear_max: np.ndarray, robots_k_stretch: np.ndarray,
-                          influence_radius2: float) -> np.ndarray:
-    
+def _compute_heatmap_core(
+    centers: np.ndarray,
+    ball_x: float, ball_y: float,
+    ball_vx: float, ball_vy: float, 
+    ball_theta: float, ball_v_theta: float,
+    robots_x: np.ndarray, robots_y: np.ndarray,
+    robots_vx: np.ndarray, robots_vy: np.ndarray,
+    robots_theta: np.ndarray, robots_vtheta: np.ndarray,
+    robots_A: np.ndarray, robots_sigma2: np.ndarray, robots_beta: np.ndarray,
+    robots_epsilon: float,
+    robots_gamma: np.ndarray, robots_kappa: np.ndarray, robots_omega_max: np.ndarray,
+    robots_linear_max: np.ndarray, robots_k_stretch: np.ndarray,
+    influence_radius2: float) -> np.ndarray:
     n_rows, n_cols, _ = centers.shape
     colors = np.empty((n_rows, n_cols, 4), dtype=np.uint8)
 
@@ -42,46 +45,73 @@ def _compute_heatmap_core(centers: np.ndarray,
     for a in robots_A:
         if a > A_max:
             A_max = a
+    A_max = max(A_max, 2.5 )  
 
     # loop over grid
     for i in range(n_rows):
         for j in range(n_cols):
             U_total = 0.0
-            # sum potentials from all robots
+            # Sum potentials from all robots
             for r in range(robots_x.shape[0]):
                 dx = centers[i,j,0] - robots_x[r]
                 dy = centers[i,j,1] - robots_y[r]
-                # skip if outside this robot's influence
+                # Skip if outside this robot's influence
                 if dx*dx + dy*dy > influence_radius2:
                     continue
-                U = _potential_core(dx, dy,
-                                    robots_vx[r], robots_vy[r],
-                                    robots_theta[r], robots_vtheta[r],
-                                    robots_A[r], robots_sigma2[r], robots_beta[r],
-                                    robots_epsilon,
-                                    robots_gamma[r], robots_kappa[r], robots_omega_max[r],
-                                    robots_k_stretch[r], robots_linear_max[r])
+                U = _potential_core(
+                    dx, dy,
+                    robots_vx[r], robots_vy[r], robots_theta[r], robots_vtheta[r],
+                    robots_A[r], robots_sigma2[r], robots_beta[r],
+                    robots_epsilon, robots_gamma[r], robots_kappa[r], robots_omega_max[r],
+                    robots_k_stretch[r], robots_linear_max[r]
+                )
                 if U > 0.0:
                     U_total += U
+                    
+            # add ball potential
+            dx = centers[i,j,0] - ball_x
+            dy = centers[i,j,1] - ball_y
+            # skip if outside ball's influence
+            if dx*dx + dy*dy < influence_radius2:
+                U = _potential_core(
+                    dx, dy,
+                    ball_vx, ball_vy,
+                    ball_theta, ball_v_theta,
+                    2.50, (0.075*0.075), 10.0,      # A, sigma2, beta
+                    1e-5,                           # Epsilon 
+                    1e-3, 25e-3,                    # Gamma e Kappa 
+                    45,                             # Omega Max 
+                    1.0, 1.0,                       # K_stretch e V_lin_max
+                )
+                if U > 0.0:
+                    U_total -= U
 
             # normaliza
-            u = 0.0 if A_max <= 0.0 else U_total / A_max
-            if u < -0.1:
+            if A_max <= 0.0:
+                u = 0.0 
+            else:
+                u = U_total / A_max
+
+
+            if u < -0.05:
                 t = min(u, 1.0)  # t ∈ [0,1]
                 r_ = 0
-                g_ = int( 255 * (1-t) ) 
-                b_ = int( 255 * t)
-            elif u <= 0.1:
+                g_ = 0
+                b_ = 255
+                a_ = int( 255 * (1-t) ) 
+            elif u <= 0.05:
                 r_ = 0
-                g_ = 255
+                g_ = 0
                 b_ = 0
+                a_ = 0
             else:
                 t = min(u, 1.0)  # t ∈ [0,1]
-                r_ = int(255 * t)
-                g_ = int( 255 * (1-t) ) 
+                r_ = 255
+                g_ = 0 
                 b_ = 0
+                a_ = int( 255 * t ) 
             colors[i,j,0] = r_ & 0xFF
             colors[i,j,1] = g_ & 0xFF
             colors[i,j,2] = b_ & 0xFF
-            colors[i,j,3] = 127
+            colors[i,j,3] = a_ & 0xFF
     return colors
